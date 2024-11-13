@@ -1,0 +1,23 @@
+services:
+  jenkins:
+    image: jenkins-build-ff:latest
+    ports:
+      - "8080:8080"
+    userns_mode: keep-id:uid=200,gid=200
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - ./build_artifacts:/opt/bin:rw,z
+      - "C:/mozilla-source/mozilla-unified:/opt/mozilla-unified"
+  ssh-agent:
+    image: end_to_end-ssh-agent-conf
+  test-server:
+    image: test-server:latest
+    userns_mode: keep-id:uid=200,gid=200
+    extra_hosts:
+      - "brokensite.com:127.0.0.1"
+    volumes:
+      - ./build_artifacts:/opt/bin:rw,z
+volumes:
+  jenkins_home:
+  build_artifacts:
+

@@ -1,0 +1,159 @@
+FROM ubuntu:24.04
+
+RUN apt-get update
+
+#Firefox dependencies
+RUN apt-get install -y \
+  adwaita-icon-theme \
+  alsa-topology-conf \
+  alsa-ucm-conf \
+  at-spi2-common \
+  at-spi2-core \
+  dconf-gsettings-backend \
+  dconf-service \
+  fontconfig \
+  gsettings-desktop-schemas \
+  gtk-update-icon-cache \
+  hicolor-icon-theme \
+  humanity-icon-theme \
+  libasound2-data \
+  libasound2t64 \
+  libatk-bridge2.0-0t64 \
+  libatk1.0-0t64 \
+  libatspi2.0-0t64 \
+  libavahi-client3 \
+  libavahi-common-data \
+  libavahi-common3 \
+  libcairo-gobject2 \
+  libcairo2 \
+  libcolord2 \
+  libcups2t64 \
+  libdatrie1 \
+  libdconf1 \
+  libepoxy0 \
+  libfribidi0 \
+  libgdk-pixbuf-2.0-0 \
+  libgdk-pixbuf-xlib-2.0-0 \
+  libgdk-pixbuf2.0-0 \
+  libgdk-pixbuf2.0-bin \
+  libgdk-pixbuf2.0-common \
+  libgraphite2-3 \
+  libgtk-3-0t64 \
+  libgtk-3-bin \
+  libgtk-3-common \
+  libharfbuzz0b \
+  liblcms2-2 \
+  libpango-1.0-0 \
+  libpangocairo-1.0-0 \
+  libpangoft2-1.0-0 \
+  libpixman-1-0 \
+  librsvg2-2 \
+  librsvg2-common \
+  libthai-data \
+  libthai0 \
+  libwayland-client0 \
+  libwayland-cursor0 \
+  libwayland-egl1 \
+  libx11-xcb1 \
+  libxcb-render0 \
+  libxcb-shm0 \
+  libxcomposite1 \
+  libxcursor1 \
+  libxdamage1 \
+  libxfixes3 \
+  libxi6 \
+  libxinerama1 \
+  libxkbcommon0 \
+  libxrandr2 \
+  libxrender1 \
+  libxtst6 \
+  session-migration \
+  ubuntu-mono \
+  x11-common \
+  xkb-data
+
+# Test dependencies
+RUN apt-get install -y \
+  acl \
+  curl \
+  git \
+  python3 \
+  python3-pip \
+  python3-venv \
+  systemd
+
+RUN mkdir -p /opt/bin/
+RUN chown -R www-data:www-data /opt/bin/
+
+RUN curl -OL https://github.com/mozilla/geckodriver/releases/download/v0.35.0/geckodriver-v0.35.0-linux64.tar.gz
+RUN mkdir -p /tmp/geckodriver && mv geckodriver-v0.35.0-linux64.tar.gz /tmp/geckodriver
+WORKDIR /tmp/geckodriver
+RUN tar xvzf geckodriver-v0.35.0-linux64.tar.gz
+RUN mv geckodriver /usr/local/bin && rm -fr /tmp/geckodriver
+
+ARG USERNAME=tester
+ARG USER_UID=1515
+ARG USER_GID=$USER_UID
+RUN groupadd --gid $USER_GID $USERNAME \
+  && useradd --uid $USER_UID --gid $USER_GID -m $USERNAME
+
+RUN apt-get install -y nginx
+
+RUN printf "\
+server {\n\
+    listen 80;\n\
+\n\
+    server_name brokensite.com;\n\
+\n\
+    location / {\n\
+        proxy_pass http://127.0.0.1:8080/;\n\
+    }\n\
+\n\
+    location /testtrigger {\n\
+        include uwsgi_params;\n\
+        uwsgi_pass 127.0.0.1:3031;\n\
+    }\n\
+}\n\
+\n\
+server {\n\
+    listen 8080;\n\
+\n\
+    location / {\n\
+        root /home/www-data/brokensite/;\n\
+    }\n\
+}\n\
+" > /etc/nginx/conf.d/brokensite.conf
+
+RUN systemctl enable nginx
+RUN systemctl unmask nginx
+
+RUN mkdir -p /home/www-data/brokensite/
+RUN chown -R www-data:www-data /home/www-data/
+WORKDIR /home/www-data/brokensite/
+USER www-data
+ADD emit_telemetry.html .
+
+WORKDIR /home/www-data/
+RUN python3 -m venv testenv
+ENV PATH="/home/www-data/testenv/bin:$PATH"
+RUN /home/www-data/testenv/bin/python3 -m pip install selenium==4.24.0 uwsgi==2.0.27 uwsgitop==0.12
+RUN git clone https://github.com/mozilla/gzipServer.git
+ADD test_script.py test_script.ini .
+
+USER root
+
+RUN printf "\
+[uwsgi]\n\
+master = true\n\
+http-socket = 127.0.0.1:3031\n\
+wsgi-file = test_script.py\n\
+stats = 127.0.0.1:9191\n\
+" > /uwsgi.ini
+
+WORKDIR /
+ADD start.sh .
+RUN chmod u+x /start.sh
+
+RUN cat /start.sh
+ENTRYPOINT ["./start.sh"]
+

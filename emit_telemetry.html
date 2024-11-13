@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<head>
+<meta charset="utf-8">
+</head>
+<body>
+<button id="startButton">Start</button>
+<div id="outcomeDiv"></div>
+<div id="messageDiv"></div>
+<script>
+  function getRandomString(size) {
+    const randomStringBlockSize = 65536;
+
+    const decoder = new TextDecoder("ISO-8859-2");
+
+    const getRandomStringBlock = array => {
+      crypto.getRandomValues(array);
+      return decoder.decode(array);
+    }
+
+    let string = "";
+
+    let quotient = size / randomStringBlockSize;
+    if (quotient) {
+      let array = new Uint8Array(randomStringBlockSize);
+      for (let i = 1; i <= quotient; i++) {
+        string += getRandomStringBlock(array);
+      }
+    }
+
+    let remainder = size % randomStringBlockSize;
+    if (remainder) {
+      let array = new Uint8Array(remainder);
+      string += getRandomStringBlock(array);
+    }
+
+    return string;
+  }
+
+  const twoMegs = 2 * 1024 * 1024;
+  const startHere = document.getElementById("startButton");
+  const outcomeHere = document.getElementById("outcomeDiv");
+  const messageHere = document.getElementById("messageDiv");
+
+  startHere.onclick = () => {
+    const data = {
+      key: "foo",
+      value: getRandomString(twoMegs),
+    };
+
+    let outcome = "Failure";
+    try {
+      localStorage.setItem(data.key, data.value);
+    } catch (err) {
+      outcome = "Success";
+      const msg = document.createTextNode(err.message);
+      messageHere.appendChild(msg);
+      console.log(err.message);
+    }
+    const content = document.createTextNode(outcome);
+    outcomeHere.appendChild(content);
+  };
+</script>
+</body>

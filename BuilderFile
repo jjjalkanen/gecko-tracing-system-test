@@ -1,0 +1,21 @@
+FROM end_to_end-jenkins-conf
+
+USER root
+RUN apt-get update && apt-get install -y \
+  curl \
+  git \
+  python3 \
+  python3-pip \
+  bash findutils gzip libxml2 m4 make perl tar unzip
+
+RUN mkdir -p /opt/bin/
+RUN chown -R jenkins:jenkins /opt/bin/
+
+RUN mkdir -p /opt/m/
+RUN chown -R jenkins:jenkins /opt/m/
+
+USER jenkins
+WORKDIR /opt/m/
+RUN curl https://hg.mozilla.org/mozilla-central/raw-file/default/python/mozboot/bin/bootstrap.py -O
+RUN HOME=/opt/m python3 bootstrap.py --vcs=git --no-interactive --application="Firefox for Desktop"
+
